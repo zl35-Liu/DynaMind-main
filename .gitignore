@@ -1,0 +1,9 @@
+/data
+/outputs/DGVR/checkpoints
+/outputs/RSM/checkpoints
+
+__pycache__/
+
+
+.idea/          # PyCharm 配置
+.vscode/        # VS Code 配置

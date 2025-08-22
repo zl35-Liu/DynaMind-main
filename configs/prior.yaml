@@ -1,0 +1,44 @@
+# prior_config.yaml
+
+# 训练配置
+train:
+  mixed_precision: "fp16" # "no", "fp16", "bf16"
+  grad_accum_steps: 1
+  grad_norm_clip: 1.0
+  num_epochs: 50
+  batch_size: 16
+  log_interval: 100
+  val_interval: 5
+  ckpt_interval: 10
+  output_dir: "./prior_checkpoints"
+
+# 模型配置
+model:
+  model_dim: 768
+  depth: 12
+  dim_head: 64
+  timesteps: 1000
+  learned_query_mode: "token"
+
+# 优化器和学习率调度器配置
+optimizer:
+  prior_lr: 0.0001
+  weight_decay: 0.01
+  pct_start: 0.1
+
+# 数据集配置
+dataset:
+  raw_eeg_path: "./data/raw_eeg_data.npy"
+  text_embeds_path: "./data/text_embeds.npy"
+  val_split: 0.2
+  num_workers: 4
+
+# 预训练编码器配置
+pretrained_encoder:
+  model_path: "./eeg_encoder_checkpoints/best_eeg_encoder.pth"
+  eeg_emb_dim: 768
+
+# 引导条件配置
+# 训练时要使用的引导类型。可选值: "text_embed", "image_embed_cond", "contra_embed"
+# 示例: ['text_embed', 'image_embed_cond']
+guidance_types: ['text_embed', 'image_embed_cond', 'contra_embed']

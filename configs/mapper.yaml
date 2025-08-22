@@ -1,0 +1,76 @@
+# config.yaml
+
+# General settings
+subject_id: 1
+num_blocks: 7
+samples_per_block: 200
+seed: 42
+device: "cuda"
+eeg_time_len: 400  # 原始EEG数据的时序长度，例如 5帧 * 80个时间点
+
+# File paths
+data_dir: "E:/store/DynaMind-main/"
+eeg_data_path: "data/EEG_processed/sub{subject_id}.npy"
+text_emb_path: "data/text_embs/text_embeddings.npy"
+image_emb_path: "data/image_embs/video_image_embeddings.npy"
+emb_save_dir: "E:/store/DynaMind-main/outputs/RSM/"
+model_save_dir: "E:/store/DynaMind-main/outputs/RSM/checkpoints/mapper/"
+meta_info_dir: "data/Video/meta-info"
+
+label_info:
+  video_category:
+    file: "All_video_category_40.npy"
+  face_appearance:
+    file: "All_video_face_apperance.npy"
+  human_appearance:
+    file: "All_video_human_apperance.npy"
+  object_count:
+    file: "All_video_obj_number.npy"
+    adjust: "-1"
+  flow:
+    file: "All_video_optical_flow_score.npy"
+    adjust: "threshold_1.799"
+  color:
+    file: "All_video_color.npy"
+  concept:
+    file: "All_video_category_9.npy"
+
+# Training hyperparameters
+epochs: 300
+batch_size: 128
+learning_rate: 1e-4
+weight_decay: 0.05
+min_learning_rate: 1e-5
+validate_every_n_epochs: 5
+
+# --- 训练任务配置 (已修改) ---
+training_tasks:
+  text_alignment:
+    enabled: True
+    weight: 0.3
+    emb_dim: 59136  # 77 * 768
+  image_alignment:
+    enabled: True
+    weight: 0.1
+    emb_dim: 768   # 1 * 768
+  classification:
+    enabled: True
+    weight: 0.5
+    tasks:
+      video_category: 40
+      face_appearance: 2
+      human_appearance: 2
+      object_count: 3
+      flow: 2
+      color: 7
+      concept: 9
+
+# 分类任务的独立损失权重
+loss_weights:
+  video_category: 1
+  face_appearance: 0
+  human_appearance: 0
+  object_count: 0
+  flow: 0
+  color: 0
+  concept: 0
