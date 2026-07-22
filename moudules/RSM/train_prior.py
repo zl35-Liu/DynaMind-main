@@ -7,14 +7,16 @@ from tqdm import tqdm
 import yaml
 import json
 import os
-from omegaconf import OmegaConf  # 确保已安装
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+from omegaconf import OmegaConf
 from collections import ChainMap
 
-# --- 导入你需要的模型和工具函数 ---
-from EEG2Video.diffusion_prior.model import BrainDiffusionPrior, PriorNetwork
-from EEG2Video.models.eeg_encoder_model import UnifiedEEGModel
 
-# --- 固定配置和常量 ---
+from moudules.RSM.models.diffusion_prior import BrainDiffusionPrior, PriorNetwork
+from moudules.RSM.models.reign_mapper import UnifiedEEGModel
+
+
 clip_seq_len = 77
 clip_feature_dim = 768
 EEG_ENCODER_TASK_CONFIG = {
@@ -23,7 +25,7 @@ EEG_ENCODER_TASK_CONFIG = {
 }
 
 
-# 创建数据集
+
 class EEGTextDataset(Dataset):
     def __init__(self, raw_eeg_data_np, text_embeds_np):
         self.raw_eeg_data = torch.tensor(raw_eeg_data_np, dtype=torch.float32)
@@ -40,27 +42,41 @@ class EEGTextDataset(Dataset):
 
 
 def train_diffusion_prior(config):
-    # 将配置字典平铺，方便访问
-    flat_config = dict(ChainMap(*config.values()))
+
+    train_cfg = config['train']
+    model_cfg = config['model']
+    pretrained_cfg = config['pretrained_encoder']
+    dataset_cfg = config['dataset']
+    optimizer_cfg = config['optimizer']
+
+
+    guidance_cfg = config.get('guidance', {})
+    guidance_types = guidance_cfg.get('types', config.get('guidance_types', []))
 
     accelerator = Accelerator(
-        mixed_precision=flat_config['mixed_precision'],
-        gradient_accumulation_steps=flat_config['grad_accum_steps']
+        mixed_precision=train_cfg['mixed_precision'],
+        gradient_accumulation_steps=train_cfg['grad_accum_steps']
     )
     device = accelerator.device
 
     print("Loading and freezing the pre-trained EEG encoder...")
-    # 假设你的 encoder_cfg 是一个 OmegaConf 对象，或者是一个字典
-    encoder_cfg = OmegaConf.create({
-        "training_tasks": {
-            "text_alignment": {"enabled": True, "emb_dim": clip_feature_dim},
-            "image_alignment": {"enabled": True, "emb_dim": clip_feature_dim},
-            "classification": {"enabled": False}
-        }
-    })
 
-    eeg_encoder_model = UnifiedEEGModel(encoder_cfg)
-    eeg_encoder_model.load_state_dict(torch.load(flat_config["model_path"], map_location='cpu'))
+
+    original_encoder_cfg_path = pretrained_cfg['original_config']
+
+
+    if not os.path.exists(original_encoder_cfg_path):
+        raise FileNotFoundError(f"Original encoder config not found at: {original_encoder_cfg_path}")
+
+    with open(original_encoder_cfg_path, 'r') as f:
+        original_cfg = yaml.safe_load(f)
+
+    eeg_encoder_model = UnifiedEEGModel(OmegaConf.create(original_cfg))
+
+
+
+
+
     eeg_encoder_model.to(device)
 
     for param in eeg_encoder_model.parameters():
@@ -68,49 +84,52 @@ def train_diffusion_prior(config):
     eeg_encoder_model.eval()
     print("Pre-trained EEG encoder loaded and frozen.")
 
+
     prior_network = PriorNetwork(
-        dim=flat_config['model_dim'],
-        depth=flat_config['depth'],
-        dim_head=flat_config['dim_head'],
-        heads=flat_config['model_dim'] // flat_config['dim_head'],
+
+        depth=model_cfg['depth'],
+        dim_head=model_cfg['dim_head'],
+        heads=model_cfg['model_dim'] // model_cfg['dim_head'],
         causal=False,
         num_tokens=clip_seq_len,
-        learned_query_mode=flat_config['learned_query_mode']
+        learned_query_mode=model_cfg['learned_query_mode']
     )
 
     diffusion_prior = BrainDiffusionPrior(
         net=prior_network,
-        image_embed_dim=flat_config['model_dim'],
+        image_embed_dim=model_cfg['model_dim'],
         condition_on_text_encodings=False,
-        timesteps=flat_config['timesteps'],
+        timesteps=model_cfg['timesteps'],
         image_embed_scale=None
     )
     model = diffusion_prior
 
-    raw_eeg_data = np.load(flat_config['raw_eeg_path'])
-    text_embeds = np.load(flat_config['text_embeds_path'])
+
+    raw_eeg_data = np.load(dataset_cfg['raw_eeg_path'])
+    text_embeds = np.load(dataset_cfg['text_embeds_path'])
 
     dataset = EEGTextDataset(raw_eeg_data, text_embeds)
     dataset_size = len(dataset)
-    val_size = int(flat_config['val_split'] * dataset_size)
+    val_size = int(dataset_cfg['val_split'] * dataset_size)
     train_size = dataset_size - val_size
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
-    train_loader = DataLoader(train_dataset, batch_size=flat_config['batch_size'], shuffle=True, pin_memory=True,
-                              num_workers=flat_config['num_workers'])
-    val_loader = DataLoader(val_dataset, batch_size=flat_config['batch_size'], shuffle=False, pin_memory=True,
-                            num_workers=flat_config['num_workers'])
+    train_loader = DataLoader(train_dataset, batch_size=train_cfg['batch_size'], shuffle=True, pin_memory=True,
+                              num_workers=dataset_cfg['num_workers'])
+    val_loader = DataLoader(val_dataset, batch_size=train_cfg['batch_size'], shuffle=False, pin_memory=True,
+                            num_workers=dataset_cfg['num_workers'])
 
-    print(f"数据集大小: 总共 {dataset_size}, 训练 {train_size}, 验证 {val_size}")
+    print(f"Dataset size: total  {dataset_size}, training  {train_size}, validation  {val_size}")
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=flat_config['prior_lr'],
-                                  weight_decay=flat_config['weight_decay'])
+
+    optimizer = torch.optim.AdamW(model.parameters(), lr=optimizer_cfg['prior_lr'],
+                                  weight_decay=optimizer_cfg['weight_decay'])
     steps_per_epoch = len(train_loader)
     scheduler = torch.optim.lr_scheduler.OneCycleLR(
         optimizer,
-        max_lr=flat_config['prior_lr'],
-        total_steps=flat_config['num_epochs'] * steps_per_epoch,
-        pct_start=flat_config['pct_start']
+        max_lr=optimizer_cfg['prior_lr'],
+        total_steps=train_cfg['num_epochs'] * steps_per_epoch,
+        pct_start=optimizer_cfg['pct_start']
     )
 
     model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(
@@ -123,9 +142,7 @@ def train_diffusion_prior(config):
     model.train()
     eeg_encoder.eval()
     global_step = 0
-    progress_bar = tqdm(range(flat_config['num_epochs']), desc="Training Diffusion Prior")
-
-    guidance_types = flat_config.get('guidance_types', [])
+    progress_bar = tqdm(range(train_cfg['num_epochs']), desc="Training Diffusion Prior")
 
     for epoch in progress_bar:
         epoch_loss = 0.0
@@ -150,7 +167,7 @@ def train_diffusion_prior(config):
 
                 if accelerator.sync_gradients:
                     accelerator.clip_grad_norm_(accelerator.unwrap_model(model).parameters(),
-                                                flat_config['grad_norm_clip'])
+                                                train_cfg['grad_norm_clip'])
 
                 optimizer.step()
                 optimizer.zero_grad()
@@ -159,19 +176,53 @@ def train_diffusion_prior(config):
                 epoch_loss += loss.item()
                 global_step += 1
 
-                if global_step % flat_config['log_interval'] == 0:
+                if global_step % train_cfg['log_interval'] == 0:
                     progress_bar.set_postfix(loss=loss.item())
 
-        # ... (验证循环和保存模型逻辑)
 
-    final_output_dir = os.path.join(flat_config['output_dir'], "final")
+        if epoch % train_cfg['val_interval'] == 0:
+            model.eval()
+            val_loss = 0.0
+            val_steps = 0
+
+            with torch.no_grad():
+                for batch in val_loader:
+                    eeg_features = eeg_encoder(batch["raw_eeg"])
+                    eeg_text_emb = text_projection(eeg_features).unsqueeze(1)
+                    eeg_image_emb = image_projection(eeg_features).unsqueeze(1)
+
+                    text_embed_input = eeg_text_emb if 'text_embed' in guidance_types else None
+                    image_embed_cond_input = eeg_image_emb if 'image_embed_cond' in guidance_types else None
+                    contra_embed_input = eeg_text_emb if 'contra_embed' in guidance_types else None
+
+                    loss, _ = model(
+                        image_embed=batch["text_embed"],
+                        text_embed=text_embed_input,
+                        image_embed_cond=image_embed_cond_input,
+                        contra_embed=contra_embed_input,
+                    )
+                    val_loss += loss.item()
+                    val_steps += 1
+
+            avg_val_loss = val_loss / val_steps if val_steps > 0 else 0.0
+            print(f"Epoch {epoch}: Train Loss = {epoch_loss/len(train_loader):.4f}, Val Loss = {avg_val_loss:.4f}")
+            model.train()
+
+
+        if epoch % train_cfg['ckpt_interval'] == 0:
+            checkpoint_dir = os.path.join(train_cfg['output_dir'], f"checkpoint-epoch-{epoch}")
+            accelerator.save_state(output_dir=checkpoint_dir)
+            print(f"Checkpoint saved at epoch {epoch}")
+
+
+    final_output_dir = os.path.join(train_cfg['output_dir'], "final")
     accelerator.save_state(output_dir=final_output_dir)
     print("Training completed!")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Diffusion Prior Training")
-    parser.add_argument("--config_path", type=str, default="./prior_config.yaml",
+    parser.add_argument("--config_path", type=str, default="/path/to/DynaMind-main/configs/prior.yaml",
                         help="Path to the training configuration file (YAML or JSON).")
     args = parser.parse_args()
 

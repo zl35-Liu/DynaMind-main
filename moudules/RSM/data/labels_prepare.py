@@ -5,10 +5,10 @@ from einops import rearrange
 
 def preprocess_and_save_labels():
     """
-    预处理并保存所有分类任务的标签数据，路径硬编码。
+    Preprocess and save labels for every classification task using the configured paths.
     """
-    # 硬编码文件路径和参数
-    DATA_DIR = "E:/store/DynaMind-main/"
+
+    DATA_DIR = "/path/to/DynaMind-main/"
     META_INFO_DIR = "data/Video/meta-info"
     SAMPLES_PER_BLOCK = 200
     NUM_BLOCKS = 7
@@ -18,8 +18,8 @@ def preprocess_and_save_labels():
 
     print(f"Loading and processing labels for saving to {meta_info_path}...")
 
-    # --- 1. 处理 video_category 标签 ---
-    # 原始 40 分类标签数组
+
+
     GT_label_raw = np.array([[23, 22, 9, 6, 18, 14, 5, 36, 25, 19, 28, 35, 3, 16, 24, 40, 15, 27, 38, 33,
                               34, 4, 39, 17, 1, 26, 20, 29, 13, 32, 37, 2, 11, 12, 30, 31, 8, 21, 7, 10, ],
                              [27, 33, 22, 28, 31, 12, 38, 4, 18, 17, 35, 39, 40, 5, 24, 32, 15, 13, 2, 16,
@@ -43,8 +43,8 @@ def preprocess_and_save_labels():
     np.save(os.path.join(meta_info_path, "All_video_category_40.npy"), processed_video_category)
     print(f"Processed 'video_category' labels saved to {os.path.join(meta_info_path, 'All_video_category.npy')}")
 
-    # --- 2. 处理 concept 标签 ---
-    # 原始 40 分类标签数组，用于分箱
+
+
     GT_label6_raw = np.copy(GT_label_raw)
     for i in range(NUM_BLOCKS):
         for j in range(40):
@@ -80,5 +80,5 @@ def preprocess_and_save_labels():
 
 if __name__ == "__main__":
 
-    # 你可以在这里直接调用函数，或者在终端中运行脚本。
+
     preprocess_and_save_labels()

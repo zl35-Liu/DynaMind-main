@@ -1,4 +1,4 @@
-# Adapted from https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/attention.py
+
 
 from dataclasses import dataclass
 from typing import Optional
@@ -52,7 +52,7 @@ class Transformer3DModel(ModelMixin, ConfigMixin):
         self.attention_head_dim = attention_head_dim
         inner_dim = num_attention_heads * attention_head_dim
 
-        # Define input layers
+
         self.in_channels = in_channels
 
         self.norm = torch.nn.GroupNorm(num_groups=norm_num_groups, num_channels=in_channels, eps=1e-6, affine=True)
@@ -61,7 +61,7 @@ class Transformer3DModel(ModelMixin, ConfigMixin):
         else:
             self.proj_in = nn.Conv2d(in_channels, inner_dim, kernel_size=1, stride=1, padding=0)
 
-        # Define transformers blocks
+
         self.transformer_blocks = nn.ModuleList(
             [
                 BasicTransformerBlock(
@@ -80,14 +80,14 @@ class Transformer3DModel(ModelMixin, ConfigMixin):
             ]
         )
 
-        # 4. Define output layers
+
         if use_linear_projection:
             self.proj_out = nn.Linear(in_channels, inner_dim)
         else:
             self.proj_out = nn.Conv2d(inner_dim, in_channels, kernel_size=1, stride=1, padding=0)
 
     def forward(self, hidden_states, encoder_hidden_states=None, timestep=None, return_dict: bool = True):
-        # Input
+
         assert hidden_states.dim() == 5, f"Expected hidden_states to have ndim=5, but got ndim={hidden_states.dim()}."
         video_length = hidden_states.shape[2]
         hidden_states = rearrange(hidden_states, "b c f h w -> (b f) c h w")
@@ -106,7 +106,7 @@ class Transformer3DModel(ModelMixin, ConfigMixin):
             hidden_states = hidden_states.permute(0, 2, 3, 1).reshape(batch, height * weight, inner_dim)
             hidden_states = self.proj_in(hidden_states)
 
-        # Blocks
+
         for block in self.transformer_blocks:
             hidden_states = block(
                 hidden_states,
@@ -115,7 +115,7 @@ class Transformer3DModel(ModelMixin, ConfigMixin):
                 video_length=video_length
             )
 
-        # Output
+
         if not self.use_linear_projection:
             hidden_states = (
                 hidden_states.reshape(batch, height, weight, inner_dim).permute(0, 3, 1, 2).contiguous()
@@ -154,7 +154,7 @@ class BasicTransformerBlock(nn.Module):
         self.only_cross_attention = only_cross_attention
         self.use_ada_layer_norm = num_embeds_ada_norm is not None
 
-        # SC-Attn
+
         self.attn1 = SparseCausalAttention(
             query_dim=dim,
             heads=num_attention_heads,
@@ -166,7 +166,7 @@ class BasicTransformerBlock(nn.Module):
         )
         self.norm1 = AdaLayerNorm(dim, num_embeds_ada_norm) if self.use_ada_layer_norm else nn.LayerNorm(dim)
 
-        # Cross-Attn
+
         if cross_attention_dim is not None:
             self.attn2 = CrossAttention(
                 query_dim=dim,
@@ -185,11 +185,11 @@ class BasicTransformerBlock(nn.Module):
         else:
             self.norm2 = None
 
-        # Feed-forward
+
         self.ff = FeedForward(dim, dropout=dropout, activation_fn=activation_fn)
         self.norm3 = nn.LayerNorm(dim)
 
-        # Temp-Attn
+
         self.attn_temp = CrossAttention(
             query_dim=dim,
             heads=num_attention_heads,
@@ -216,7 +216,7 @@ class BasicTransformerBlock(nn.Module):
             )
         else:
             try:
-                # Make sure we can run the memory efficient attention
+
                 _ = xformers.ops.memory_efficient_attention(
                     torch.randn((1, 2, 40), device="cuda"),
                     torch.randn((1, 2, 40), device="cuda"),
@@ -227,10 +227,10 @@ class BasicTransformerBlock(nn.Module):
             self.attn1._use_memory_efficient_attention_xformers = use_memory_efficient_attention_xformers
             if self.attn2 is not None:
                 self.attn2._use_memory_efficient_attention_xformers = use_memory_efficient_attention_xformers
-            # self.attn_temp._use_memory_efficient_attention_xformers = use_memory_efficient_attention_xformers
+
 
     def forward(self, hidden_states, encoder_hidden_states=None, timestep=None, attention_mask=None, video_length=None):
-        # SparseCausal-Attention
+
         norm_hidden_states = (
             self.norm1(hidden_states, timestep) if self.use_ada_layer_norm else self.norm1(hidden_states)
         )
@@ -243,7 +243,7 @@ class BasicTransformerBlock(nn.Module):
             hidden_states = self.attn1(norm_hidden_states, attention_mask=attention_mask, video_length=video_length) + hidden_states
 
         if self.attn2 is not None:
-            # Cross-Attention
+
             norm_hidden_states = (
                 self.norm2(hidden_states, timestep) if self.use_ada_layer_norm else self.norm2(hidden_states)
             )
@@ -254,10 +254,10 @@ class BasicTransformerBlock(nn.Module):
                 + hidden_states
             )
 
-        # Feed-forward
+
         hidden_states = self.ff(self.norm3(hidden_states)) + hidden_states
 
-        # Temporal-Attention
+
         d = hidden_states.shape[1]
         hidden_states = rearrange(hidden_states, "(b f) d c -> (b d) f c", f=video_length)
         norm_hidden_states = (
@@ -309,10 +309,10 @@ class SparseCausalAttention(CrossAttention):
                 attention_mask = F.pad(attention_mask, (0, target_length), value=0.0)
                 attention_mask = attention_mask.repeat_interleave(self.heads, dim=0)
 
-        # attention, what we cannot get enough of
+
         if self._use_memory_efficient_attention_xformers:
             hidden_states = self._memory_efficient_attention_xformers(query, key, value, attention_mask)
-            # Some versions of xformers return output in fp32, cast it back to the dtype of the input
+
             hidden_states = hidden_states.to(query.dtype)
         else:
             if self._slice_size is None or query.shape[0] // self._slice_size == 1:
@@ -320,9 +320,9 @@ class SparseCausalAttention(CrossAttention):
             else:
                 hidden_states = self._sliced_attention(query, key, value, sequence_length, dim, attention_mask)
 
-        # linear proj
+
         hidden_states = self.to_out[0](hidden_states)
 
-        # dropout
+
         hidden_states = self.to_out[1](hidden_states)
         return hidden_states

@@ -1,34 +1,25 @@
-# config.yaml
-
-# 训练配置
 train:
-  batch_size: 32
-  learning_rate: 0.0001
-  num_epochs: 200
-  alignment_loss_weight: 0.01
-  consistency_loss_weight: 0.99
+  batch_size: 30
+  learning_rate: 0.000028
+  num_epochs: 192
+  alignment_loss_weight: 0.022
 
-# 数据集配置
 dataset:
-  groups: 7
-  classes: 40
-  samples_per_class: 5
-  in_channels: 62
-  total_time_len: 400
-  num_video_frames: 6
+  eeg_path: "/path/to/DynaMind-main/data/EEG_processed/sub1.npy"
+  vae_path: "/path/to/DynaMind-main/data/vae_latents/latents.pt"
+  in_channels: 64
+  total_time_len: 4000
+  num_video_frames: 33
 
-# 模型配置
 model:
-  filter_num_filters: 4
-  patch_embed_dim: 256
-  conv_out_channels: 512
-  # 滑动窗口参数
-  patch_length: 100 # 每个切片的长度，建议是 total_time_len / num_video_frames 附近
-  patch_stride: 60 # 每次滑动的步长，小于 patch_length 会产生重叠
+  filter_num_filters: 2
+  patch_embed_dim: 512
+  conv_out_channels: 1024
+  patch_length: 800
+  patch_stride: 100
 
-# 投影目标维度配置
 projection:
-  vae_latent_c: 4
-  vae_latent_h: 36
-  vae_latent_w: 64
+  vae_latent_c: 8
+  vae_latent_h: 60
+  vae_latent_w: 90
   clip_emb_dim: 768

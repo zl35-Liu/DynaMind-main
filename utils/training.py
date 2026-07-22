@@ -1,11 +1,11 @@
-# loss metrics optim model相关的
+
 import numpy as np
 from typing import Union
 import torch
 from tqdm import tqdm
 
 
-# DDIM Inversion
+
 @torch.no_grad()
 def init_prompt(prompt, pipeline):
     uncond_input = pipeline.tokenizer(
@@ -71,35 +71,27 @@ import os
 
 def in_batch_contrastive_loss(eeg_emb, target_emb, temperature=0.07):
     """
-    计算批次内对比损失（in-batch contrastive loss），通常用于CLIP风格的对齐。
-
-    Args:
-        eeg_emb (torch.Tensor): EEG特征，形状为 (batch_size, feature_dim)。
-        target_emb (torch.Tensor): 目标特征（如文本或图像），形状为 (batch_size, feature_dim)。
-        temperature (float): 温度参数，用于调整损失的锐度。
-
-    Returns:
-        torch.Tensor: 计算出的对比损失。
+    Compute an in-batch contrastive loss for CLIP-style alignment between EEG embeddings and target text or image embeddings.
     """
-    # 归一化特征
+
     eeg_emb = F.normalize(eeg_emb, dim=1)
     target_emb = F.normalize(target_emb, dim=1)
 
-    # 计算相似度矩阵（点积）
-    # logits_per_eeg: (batch_size, batch_size)
+
+
     logits_per_eeg = torch.matmul(eeg_emb, target_emb.T) / temperature
 
-    # logits_per_target: (batch_size, batch_size)
+
     logits_per_target = logits_per_eeg.T
 
-    # 创建正样本标签，即对角线元素
+
     labels = torch.arange(logits_per_eeg.shape[0], device=eeg_emb.device).long()
 
-    # 计算交叉熵损失
+
     loss_eeg = F.cross_entropy(logits_per_eeg, labels)
     loss_target = F.cross_entropy(logits_per_target, labels)
 
-    # 总损失是两个方向损失的平均值
+
     total_loss = (loss_eeg + loss_target) / 2
 
     return total_loss
@@ -107,16 +99,10 @@ def in_batch_contrastive_loss(eeg_emb, target_emb, temperature=0.07):
 
 def compute_global_mean_var(data_block):
     """
-    计算整个EEG数据集的全局均值和方差。
-
-    Args:
-        data_block (np.ndarray): EEG数据，形状通常为 (num_blocks, samples_per_block, ...)。
-
-    Returns:
-        tuple: 包含全局均值和全局方差的元组。
+    Compute the global mean and variance of an EEG dataset. The input usually has shape (blocks, samples per block, ...).
     """
-    # 将所有数据块展平以计算全局统计量
-    # 假设数据形状是 (B, S, C, T) 或 (B, C, T) 等，我们只关心其数值
+
+
     data_flat = data_block.flatten()
     global_mean = np.mean(data_flat)
     global_var = np.var(data_flat)
@@ -125,15 +111,7 @@ def compute_global_mean_var(data_block):
 
 def calculate_topk_accuracy(logits, labels, k=1):
     """
-    计算给定logits的Top-k准确率。
-
-    Args:
-        logits (torch.Tensor): 模型的预测输出，形状为 (batch_size, num_classes)。
-        labels (torch.Tensor): 真实标签，形状为 (batch_size,)。
-        k (int): Top-k中的k值。
-
-    Returns:
-        float: Top-k准确率。
+    Compute top-k accuracy from prediction logits and ground-truth labels.
     """
     with torch.no_grad():
         _, topk_preds = logits.topk(k, dim=1, largest=True, sorted=True)
@@ -145,12 +123,7 @@ def calculate_topk_accuracy(logits, labels, k=1):
 
 def plot_loss_curves(train_losses, val_losses, save_path="loss_curves.png"):
     """
-    绘制训练和验证损失曲线。
-
-    Args:
-        train_losses (list): 训练损失列表。
-        val_losses (list): 验证损失列表。
-        save_path (str): 图像保存路径。
+    Plot the training and validation loss curves and save the figure.
     """
     plt.figure(figsize=(10, 6))
     plt.plot(train_losses, label='Train Loss')
@@ -167,13 +140,7 @@ def plot_loss_curves(train_losses, val_losses, save_path="loss_curves.png"):
 
 def plot_accuracy_curves(task_name, train_accs, val_accs, save_dir="accuracy_curves"):
     """
-    为特定任务绘制训练和验证准确率曲线。
-
-    Args:
-        task_name (str): 任务名称。
-        train_accs (list): 训练准确率列表。
-        val_accs (list): 验证准确率列表。
-        save_dir (str): 图像保存目录。
+    Plot training and validation accuracy curves for a specified task and save them in the output directory.
     """
     os.makedirs(save_dir, exist_ok=True)
     plt.figure(figsize=(10, 6))

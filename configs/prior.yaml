@@ -1,18 +1,14 @@
-# prior_config.yaml
-
-# 训练配置
 train:
-  mixed_precision: "fp16" # "no", "fp16", "bf16"
+  mixed_precision: "fp16"
   grad_accum_steps: 1
-  grad_norm_clip: 1.0
-  num_epochs: 50
-  batch_size: 16
-  log_interval: 100
-  val_interval: 5
-  ckpt_interval: 10
-  output_dir: "./prior_checkpoints"
+  grad_norm_clip: 0.95
+  num_epochs: 48
+  batch_size: 14
+  log_interval: 96
+  val_interval: 6
+  ckpt_interval: 12
+  output_dir: "/path/to/DynaMind-main/outputs/RSM/checkpoints/prior"
 
-# 模型配置
 model:
   model_dim: 768
   depth: 12
@@ -20,25 +16,22 @@ model:
   timesteps: 1000
   learned_query_mode: "token"
 
-# 优化器和学习率调度器配置
 optimizer:
-  prior_lr: 0.0001
-  weight_decay: 0.01
-  pct_start: 0.1
+  prior_lr: 0.000095
+  weight_decay: 0.012
+  pct_start: 0.12
 
-# 数据集配置
 dataset:
-  raw_eeg_path: "./data/raw_eeg_data.npy"
-  text_embeds_path: "./data/text_embeds.npy"
-  val_split: 0.2
-  num_workers: 4
+  raw_eeg_path: "/path/to/DynaMind-main/data/raw_eeg_data.npy"
+  text_embeds_path: "/path/to/DynaMind-main/data/text_embeds.npy"
+  val_split: 0.18
+  num_workers: 3
 
-# 预训练编码器配置
 pretrained_encoder:
-  model_path: "./eeg_encoder_checkpoints/best_eeg_encoder.pth"
+  model_path: "/path/to/DynaMind-main/outputs/RSM/checkpoints/mapper/best_model_sub1_fold2.pth"
+  original_config: "/path/to/DynaMind-main/configs/mapper.yaml"
   eeg_emb_dim: 768
+  eeg_time_len: 400
 
-# 引导条件配置
-# 训练时要使用的引导类型。可选值: "text_embed", "image_embed_cond", "contra_embed"
-# 示例: ['text_embed', 'image_embed_cond']
-guidance_types: ['text_embed', 'image_embed_cond', 'contra_embed']
+guidance:
+  types: ['text_embed', 'image_embed_cond', 'contra_embed']

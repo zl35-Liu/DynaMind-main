@@ -1,0 +1,28 @@
+dataset:
+  eeg_path: "/path/to/DynaMind-main/data/EEG_processed/sub1_session2.npy"
+  vae_path: "/path/to/DynaMind-main/data/vae_latents/all_video_latents.pt"
+  val_ratio: 0.12
+
+train:
+  num_epochs: 96
+  batch_size: 10
+  learning_rate: 9.5e-5
+  alignment_loss_weight: 0.11
+  temperature: 0.072
+  output_dir: "/path/to/DynaMind-main/outputs_align"
+  train_probe_size: 120
+  save_max_samples_per_split: 60
+  save_dtype: float16
+  seed: 43
+  num_workers: 3
+  pin_memory: true
+
+model:
+  patch_length: 100
+  patch_stride: 60
+  conv_out_channels: 512
+  patch_embed_dim: 256
+  filter_num_filters: 4
+
+projection:
+  clip_emb_dim: 768

@@ -1,0 +1,13 @@
+Temporal_Flow:
+  brain_regions_list:
+    - [[0, 1, 2, 3, 4, 5], "Occipital"]
+    - [[6, 7, 8, 9, 10], "Parietal"]
+    - [[11, 12, 13, 14], "Temporal"]
+    - [[15, 16, 17, 18], "Frontal"]
+
+Original_CM_Flow:
+  brain_regions_list:
+    - [[0, 1, 2, 3, 4, 5], "Occipital"]
+    - [[6, 7, 8, 9, 10], "Parietal"]
+    - [[11, 12, 13, 14], "Central/Motor"]
+    - [[15, 16, 17, 18], "Frontal"]

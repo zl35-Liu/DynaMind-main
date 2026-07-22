@@ -8,9 +8,9 @@ import cv2
 import numpy as np
 
 
-# ==============================================================================
-# 视频处理函数：切分、采样帧并返回张量列表
-# ==============================================================================
+
+
+
 def process_videos_to_tensors(
         video_dir: str,
         sub_dir: str = "video_tensor",
@@ -18,16 +18,7 @@ def process_videos_to_tensors(
         output_width: int = 512
 ) -> torch.Tensor:
     """
-    处理指定目录下的7个MP4视频，切分、采样帧并保存为短视频片段，同时返回处理后的张量列表。
-
-    Args:
-        video_dir (str): 包含7个MP4视频文件的目录路径。
-        output_clips_dir (str): 保存短视频片段的子目录路径。
-        output_height (int): 视频帧的输出高度。
-        output_width (int): 视频帧的输出宽度。
-
-    Returns:
-        List[torch.Tensor]: 包含1400个视频片段的张量列表，每个张量形状为 (6, 3, H, W)。
+    Split and sample the seven MP4 videos in a directory, save short clips, and return the processed frame tensors.
     """
     output_clips_dir = os.path.join(video_data_dir, "video_clips")
     output_tensors_dir = os.path.join(video_data_dir, "video_tensor")
@@ -43,7 +34,7 @@ def process_videos_to_tensors(
 
     processed_video_list: List[torch.Tensor] = []
 
-    # 按照提供的逻辑设置参数
+
     fps = 24
     waste_time = 3
     block_time = 13
@@ -90,7 +81,7 @@ def process_videos_to_tensors(
                 clip_tensor_np = rearrange(sampled_frames, "f h w c -> f c h w")
                 processed_video_list.append(torch.from_numpy(clip_tensor_np))
 
-                # 保存为MP4文件
+
                 video_counter += 1
                 output_clip_path = os.path.join(output_clips_dir, f"{video_counter}.mp4")
                 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -108,24 +99,16 @@ def process_videos_to_tensors(
     return processed_video
 
 
-# ==============================================================================
-# 图像嵌入生成函数：使用 CLIP Vision Encoder
-# ==============================================================================
+
+
+
 def generate_video_embeddings(
         video_tensors: torch.Tensor,
-        pretrained_model_path: str = "E:/store/DynaMind-main/outputs/RSM/checkpoints/clip-vit-large-patch14",
+        pretrained_model_path: str = "/path/to/DynaMind-main/outputs/RSM/checkpoints/clip-vit-large-patch14",
         device: str = "cuda" if torch.cuda.is_available() else "cpu"
 ) -> Optional[torch.Tensor]:
     """
-    使用 CLIP Vision Encoder 从视频帧张量列表生成 image embeddings。
-
-    Args:
-        video_tensors (List[torch.Tensor]): 包含所有视频片段的张量列表。
-        pretrained_model_path (str): 预训练模型根目录。
-        device (str): 运行推理的设备（'cuda' 或 'cpu'）。
-
-    Returns:
-        Optional[torch.Tensor]: 形状为 (num_videos, 768) 的平均 image embeddings 张量。
+    Generate image embeddings from video-frame tensors with a CLIP vision encoder and save the resulting features.
     """
     print(f"Loading CLIP vision processor and model from {pretrained_model_path}...")
     try:
@@ -145,11 +128,11 @@ def generate_video_embeddings(
         for i in range(video_tensors.size()[0]):
             print(f"Generating embeddings for video clip {i + 1}/{len(video_tensors)}...")
             video_clip = video_tensors[i]
-            # 视频张量形状为 (F, C, H, W)，需要处理每一帧
+
             frame_embeddings: List[torch.Tensor] = []
 
             for frame_tensor in video_clip:
-                # CLIP 图像处理器期望输入为 HWC 或 PIL Image
+
                 frame_hwc = frame_tensor.permute(1, 2, 0).numpy().astype("uint8")
 
                 processed_frame = processor(images=frame_hwc, return_tensors="pt").to(device)
@@ -158,7 +141,7 @@ def generate_video_embeddings(
                 projected_embedding = model.visual_projection(output.pooler_output)
                 frame_embeddings.append(projected_embedding)
 
-            # 对所有帧的嵌入取平均得到视频的嵌入
+
             if frame_embeddings:
                 video_embedding = torch.stack(frame_embeddings).mean(dim=0)
                 all_video_embeddings.append(video_embedding)
@@ -173,18 +156,18 @@ def generate_video_embeddings(
         return None
 
 
-# ==============================================================================
-# 主程序入口
-# ==============================================================================
-if __name__ == "__main__":
-    # 指定包含MP4视频的目录路径
-    video_data_dir = "E:/store/DynaMind-main/data/Video"
 
-    # 第1步：处理视频并得到张量列表
+
+
+if __name__ == "__main__":
+
+    video_data_dir = "/path/to/DynaMind-main/data/Video"
+
+
     print("--- Step 1: Processing videos and saving clips ---")
     video_tensors_list = process_videos_to_tensors(video_data_dir)
 
-    # 第2步：使用张量列表生成图像嵌入
+
     print("\n--- Step 2: Generating image embeddings ---")
     image_embeddings = generate_video_embeddings(video_tensors_list)
 
@@ -192,8 +175,8 @@ if __name__ == "__main__":
         print("\n--- Processing Complete ---")
         print(f"Final shape of the image embeddings: {image_embeddings.shape}")
 
-        # 第3步：保存最终的嵌入张量
-        output_tensor_path = "E:/store/DynaMind-main/data/image_embs/video_image_embeddings.npy"
+
+        output_tensor_path = "/path/to/DynaMind-main/data/image_embs/video_image_embeddings.npy"
         os.makedirs(os.path.dirname(output_tensor_path), exist_ok=True)
         np.save(output_tensor_path, image_embeddings.cpu().numpy())
         print(f"Image embeddings saved to {output_tensor_path}")

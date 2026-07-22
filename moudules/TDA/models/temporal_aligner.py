@@ -1,4 +1,4 @@
-# model.py
+
 
 import torch
 import torch.nn as nn
@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from functools import partial
 from torch.nn.init import trunc_normal_
 
-# Mlp 类保持不变
+
 class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
         super().__init__()
@@ -26,7 +26,7 @@ class Mlp(nn.Module):
         return x
 
 
-# GlobalFilter 类保持不变
+
 class GlobalFilter(nn.Module):
     def __init__(self, in_channels, seq_len, num_filters=1):
         super().__init__()
@@ -41,7 +41,7 @@ class GlobalFilter(nn.Module):
     def forward(self, x):
         B, C, T = x.shape
         assert C == self.in_channels and T == self.seq_len, \
-            f"GlobalFilter 输入维度不匹配: 期望({B}, {self.in_channels}, {self.seq_len}), 实际({B}, {C}, {T})"
+            f"GlobalFilter input dimensions do not match: expected ({B}, {self.in_channels}, {self.seq_len}), received ({B}, {C}, {T})"
         x_freq = torch.fft.rfft(x, dim=-1, norm='ortho')
         output = torch.zeros(B, C, T, device=x.device, dtype=torch.float32)
         for i in range(self.num_filters):
@@ -53,7 +53,7 @@ class GlobalFilter(nn.Module):
         return output
 
 
-# EEGTimePatchEncoder - 修改了切分逻辑
+
 class EEGTimePatchEncoder(nn.Module):
     def __init__(self, in_channels=62, total_time_len=400,
                  filter_num_filters=4, patch_embed_dim=256,
@@ -68,17 +68,17 @@ class EEGTimePatchEncoder(nn.Module):
         self.patch_embed_dim = patch_embed_dim
         self.conv_out_channels = conv_out_channels
 
-        # 计算滑动窗口切分后的视频帧数 (向下取整)
+
         self.num_video_frames = (total_time_len - patch_length) // patch_stride + 1
 
-        # 1. 全局时域频域处理 (GlobalFilter)
+
         self.global_filter_block = GlobalFilter(
             in_channels=in_channels,
             seq_len=total_time_len,
             num_filters=filter_num_filters
         )
 
-        # 2. 时序 Patch 嵌入层
+
         input_dim_per_patch = in_channels * patch_length
         self.patch_embedding_layers = nn.ModuleList()
         for _ in range(self.num_video_frames):
@@ -90,7 +90,7 @@ class EEGTimePatchEncoder(nn.Module):
                 )
             )
 
-        # 3. Patch 后卷积层：处理拼接后的时序 Patch 嵌入
+
         self.patch_conv_processor = nn.Sequential(
             nn.Conv1d(patch_embed_dim, conv_out_channels // 2, kernel_size=3, padding=1),
             nn.BatchNorm1d(conv_out_channels // 2),
@@ -118,12 +118,12 @@ class EEGTimePatchEncoder(nn.Module):
     def forward(self, x):
         B, C, T_total = x.shape
         assert C == self.in_channels and T_total == self.total_time_len, \
-            f"EEGTimePatchEncoder 输入维度不匹配: 期望({B}, {self.in_channels}, {self.total_time_len}), 实际({B}, {C}, {T_total})"
+            f"EEGTimePatchEncoder input dimensions do not match: expected ({B}, {self.in_channels}, {self.total_time_len}), received ({B}, {C}, {T_total})"
 
         filtered_x = self.global_filter_block(x)
         all_patch_embeddings = []
 
-        # 2. 使用滑动窗口进行切片和嵌入
+
         for i in range(self.num_video_frames):
             start_idx = i * self.patch_stride
             end_idx = start_idx + self.patch_length
@@ -141,7 +141,7 @@ class EEGTimePatchEncoder(nn.Module):
         return processed_conv_features, final_flat_features
 
 
-# EEGVideoAlignmentModel - 构造函数添加了新的参数
+
 class EEGVideoAlignmentModel(nn.Module):
     def __init__(self, total_time_len=400, in_channels=62,
                  filter_num_filters=4, patch_embed_dim=256,
@@ -149,7 +149,7 @@ class EEGVideoAlignmentModel(nn.Module):
                  clip_emb_dim=768, patch_length=80, patch_stride=67):
         super().__init__()
 
-        # 将参数传递给 EEGTimePatchEncoder
+
         self.eeg_encoder = EEGTimePatchEncoder(
             in_channels=in_channels,
             total_time_len=total_time_len,
@@ -159,7 +159,7 @@ class EEGVideoAlignmentModel(nn.Module):
             patch_length=patch_length,
             patch_stride=patch_stride
         )
-        # 获取切分后的帧数
+
         self.num_video_frames = self.eeg_encoder.num_video_frames
         self.conv_out_channels = conv_out_channels
         self.vae_latent_c = vae_latent_c
@@ -192,8 +192,8 @@ class EEGVideoAlignmentModel(nn.Module):
             self.vae_latent_c, self.vae_latent_h, self.vae_latent_w
         )
         eeg_vae_emb_sequence = eeg_vae_emb_sequence.view(
-            -1, self.num_video_frames,
-            self.vae_latent_c, self.vae_latent_h, self.vae_latent_w
+            -1, self.vae_latent_c,
+            self.num_video_frames, self.vae_latent_h, self.vae_latent_w
         )
         eeg_clip_emb = self.clip_emb_proj(eeg_frame_features_reshaped)
         eeg_clip_emb = F.normalize(eeg_clip_emb, dim=-1)

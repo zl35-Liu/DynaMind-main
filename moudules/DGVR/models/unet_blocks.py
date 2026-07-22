@@ -1,4 +1,4 @@
-# Adapted from https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/unet_2d_blocks.py
+
 
 import torch
 from torch import nn
@@ -146,7 +146,7 @@ class UNetMidBlock3DCrossAttn(nn.Module):
         self.attn_num_head_channels = attn_num_head_channels
         resnet_groups = resnet_groups if resnet_groups is not None else min(in_channels // 4, 32)
 
-        # there is always at least one resnet
+
         resnets = [
             ResnetBlock3D(
                 in_channels=in_channels,
@@ -481,7 +481,7 @@ class CrossAttnUpBlock3D(nn.Module):
         attention_mask=None,
     ):
         for resnet, attn in zip(self.resnets, self.attentions):
-            # pop res hidden states
+
             res_hidden_states = res_hidden_states_tuple[-1]
             res_hidden_states_tuple = res_hidden_states_tuple[:-1]
             hidden_states = torch.cat([hidden_states, res_hidden_states], dim=1)
@@ -564,7 +564,7 @@ class UpBlock3D(nn.Module):
 
     def forward(self, hidden_states, res_hidden_states_tuple, temb=None, upsample_size=None):
         for resnet in self.resnets:
-            # pop res hidden states
+
             res_hidden_states = res_hidden_states_tuple[-1]
             res_hidden_states_tuple = res_hidden_states_tuple[:-1]
             hidden_states = torch.cat([hidden_states, res_hidden_states], dim=1)

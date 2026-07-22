@@ -7,12 +7,12 @@ from einops import rearrange
 import yaml
 import os
 
-# 假设你的 utils.py 已经存在
+
 from utils import (
     in_batch_contrastive_loss, compute_global_mean_var
 )
 
-# 统一的脑区配置
+
 BRAIN_REGIONS_INDICES = [
     (0, 16, "Frontal"),
     (17, 34, "Central/Motor"),
@@ -20,25 +20,130 @@ BRAIN_REGIONS_INDICES = [
     (51, 61, "Occipital")
 ]
 
+FRONTAL_INDICES = [i - 1 for i in range(1, 15)] + [i - 1 for i in range(16, 23)]
+TEMPORAL_INDICES = [14] + [i - 1 for i in range(23, 34)] + [40]
+PARIETAL_INDICES = [i - 1 for i in range(34, 41)] + [i - 1 for i in range(42, 51)]
+OCCIPITAL_INDICES = [i - 1 for i in range(51, 63)]
 
-# class Mlp(nn.Module):
-#     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
-#         super().__init__()
-#         out_features = out_features or in_features
-#         hidden_features = hidden_features or in_features
-#         self.fc1 = nn.Linear(in_features, hidden_features)
-#         self.act = act_layer()
-#         self.fc2 = nn.Linear(hidden_features, out_features)
-#         self.drop = nn.Dropout(drop)
-#
-#     def forward(self, x):
-#         x = self.fc1(x)
-#         x = self.act(x)
-#         x = self.drop(x)
-#         x = self.fc2(x)
-#         x = self.drop(x)
-#         return x
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class RegionalEEGEncoder_ST_Pooling(nn.Module):
+    def __init__(self, in_channels=62, time_len=400, region_configs=None):
+        super().__init__()
+        self.in_channels = in_channels
+        self.time_len = time_len
+        self.region_configs = region_configs or BRAIN_REGIONS_INDICES
+        self.num_regions = len(self.region_configs)
+        self.region_encoders = nn.ModuleList()
+        self.region_output_dim = 256
+
+
+
+
+        for start_ch, end_ch, _ in self.region_configs:
+            current_region_channels = end_ch - start_ch + 1
+
+
+
+
+
+
+
+            out_h_1 = current_region_channels - 3 + 1
+
+
+
+
+            out_h_2 = (out_h_1 - 3) // 2 + 1
+
+
+
+            final_spatial_kernel = out_h_2
+
+
+            self.region_encoders.append(
+                nn.Sequential(
+
+
+                    nn.Conv2d(1, 64, kernel_size=(3, 3), stride=(1, 2), padding='valid'),
+                    nn.BatchNorm2d(64),
+                    nn.GELU(),
+
+
+
+                    nn.Conv2d(64, 128, kernel_size=(3, 3), stride=(2, 2), padding='valid'),
+                    nn.BatchNorm2d(128),
+                    nn.GELU(),
+
+
+
+                    nn.Conv2d(128, 256, kernel_size=(final_spatial_kernel, 3),
+                            stride=(1, 1), padding=(0, 1)),
+                    nn.BatchNorm2d(256),
+                    nn.GELU(),
+
+
+                    nn.AdaptiveAvgPool2d((1, 1)),
+                    nn.Flatten()
+                )
+            )
+
+        self.fused_dim = self.num_regions * self.region_output_dim
+
+
+        self.fusion_mlp = nn.Sequential(
+            nn.Linear(self.fused_dim, 1024),
+            nn.GELU(),
+            nn.Dropout(0.3),
+            nn.Linear(1024, 768)
+        )
+        self.apply(self._init_weights)
+
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=.02)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, (nn.Conv1d, nn.BatchNorm1d, nn.Conv2d, nn.BatchNorm2d)):
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+
+    def forward(self, x):
+        all_region_features = []
+        for i, (start_ch, end_ch, _) in enumerate(self.region_configs):
+            region_data = x[:, start_ch:end_ch + 1, :]
+
+
+
+            region_data = region_data.unsqueeze(1)
+
+            region_feature = self.region_encoders[i](region_data)
+            all_region_features.append(region_feature)
+
+        fused_features = torch.cat(all_region_features, dim=1)
+        final_features = self.fusion_mlp(fused_features)
+        return final_features
 
 class RegionalEEGEncoder(nn.Module):
     def __init__(self, in_channels=62, time_len=400, region_configs=None):
@@ -76,7 +181,7 @@ class RegionalEEGEncoder(nn.Module):
 
         self.fused_dim = self.num_regions * self.region_output_dim
 
-        # 最终融合层的输出维度调整为 768
+
         self.fusion_mlp = nn.Sequential(
             nn.Linear(self.fused_dim, 1024),
             nn.GELU(),
@@ -106,7 +211,7 @@ class RegionalEEGEncoder(nn.Module):
         return final_features
 
 
-# 适配新编码器的统一模型
+
 class UnifiedEEGModel(nn.Module):
     def __init__(self, cfg):
         super().__init__()
@@ -123,22 +228,24 @@ class UnifiedEEGModel(nn.Module):
         self.scale = nn.Parameter(torch.tensor(1.0))
 
         if cfg.training_tasks.text_alignment.enabled:
-            # 文本投影头，输入 768，输出 59136
+
             self.text_projection = nn.Sequential(
-                nn.Linear(eeg_encoder_out_dim, cfg.training_tasks.text_alignment.emb_dim),
+                nn.Linear(eeg_encoder_out_dim, 512),
+                nn.Linear(512,512),
+                nn.Linear(512, cfg.training_tasks.text_alignment.emb_dim),
                 nn.LayerNorm(cfg.training_tasks.text_alignment.emb_dim)
             )
 
         if cfg.training_tasks.image_alignment.enabled:
-            # 图像投影头，输入 768，输出 768
-            # 这里的输入维度和输出维度相同，保留投影头可以作为额外的层，也可以简化
+
+
             self.image_projection = nn.Sequential(
                 nn.Linear(eeg_encoder_out_dim, cfg.training_tasks.image_alignment.emb_dim),
                 nn.LayerNorm(cfg.training_tasks.image_alignment.emb_dim)
             )
 
         if cfg.training_tasks.classification.enabled:
-            # 分类头，输入 768
+
             self.classifiers = nn.ModuleDict({
                 task_name: nn.Sequential(
                     nn.Linear(eeg_encoder_out_dim, 256),
@@ -149,7 +256,7 @@ class UnifiedEEGModel(nn.Module):
             })
 
     def forward(self, x):
-        # 共享编码器输出 768 维特征
+
         shared_features = self.shared_encoder(x)
 
         text_emb, image_emb, cls_logits = None, None, None

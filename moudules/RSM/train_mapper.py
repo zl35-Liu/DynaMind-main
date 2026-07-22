@@ -12,16 +12,18 @@ import matplotlib.pyplot as plt
 import argparse
 from omegaconf import OmegaConf
 
-# 导入修改后的模型
+
 from moudules.RSM.models.reign_mapper import UnifiedEEGModel
 from utils.training import (
     in_batch_contrastive_loss, compute_global_mean_var
 )
 
 
-# --- 辅助函数：数据预处理 (已移至全局) ---
+
 def preprocess_eeg_data(eeg_data_block, eeg_global_mean, eeg_global_var, device):
-    """预处理EEG数据块，转换为时域张量并标准化。"""
+    """
+    Convert an EEG data block to a temporal tensor and normalize it.
+    """
     if eeg_data_block.ndim == 5:
         eeg_data_block = rearrange(eeg_data_block, 'a b c d e -> (a b c) d e')
     elif eeg_data_block.ndim == 4:
@@ -35,13 +37,15 @@ def preprocess_eeg_data(eeg_data_block, eeg_global_mean, eeg_global_var, device)
 
 
 def preprocess_embedding(emb_data_block, emb_dim, device):
-    """预处理嵌入数据块，转换为张量。"""
+    """
+    Convert an embedding data block to a tensor.
+    """
     emb_data_block = torch.from_numpy(emb_data_block).float()
     emb_data_block = torch.reshape(emb_data_block, (emb_data_block.shape[0], emb_dim))
     return emb_data_block.to(device)
 
 
-# --- 统一的数据集类 ---
+
 class UnifiedDataset(Dataset):
     def __init__(self, eeg_data, text_emb, image_emb, class_labels_dict):
         self.eeg_data = eeg_data
@@ -60,7 +64,7 @@ class UnifiedDataset(Dataset):
                 labels)
 
 
-# --- 统一的损失函数 ---
+
 def unified_loss(
         eeg_emb, text_emb, image_emb, cls_logits, labels, cfg,
         text_emb_target, image_emb_target
@@ -88,14 +92,14 @@ def unified_loss(
     return total_loss, text_cont_loss, image_cont_loss, cls_loss
 
 
-# --- 增强的训练流程 ---
+
 def run_joint_training(
         cfg, fold_idx,
         train_eeg_raw, train_text_emb_raw, train_image_emb_raw, train_labels_dict_raw,
         val_eeg_raw, val_text_emb_raw, val_image_emb_raw, val_labels_dict_raw,
         eeg_global_mean, eeg_global_var
 ):
-    print(f"\n--- 开始联合训练第 {fold_idx + 1}/{cfg.num_blocks} 折 ---")
+    print(f"\n--- Starting joint training for fold  {fold_idx + 1}/{cfg.num_blocks}  ---")
 
     device = torch.device(cfg.device)
 
@@ -137,7 +141,7 @@ def run_joint_training(
     final_text_embs = []
     final_image_embs = []
 
-    for epoch in tqdm(range(cfg.epochs), desc=f"折叠 {fold_idx + 1} 轮次"):
+    for epoch in tqdm(range(cfg.epochs), desc=f"Fold  {fold_idx + 1} , epoch "):
         model.train()
         total_loss = 0
         for eeg_batch, text_emb_target, image_emb_target, labels in dataloader:
@@ -163,7 +167,7 @@ def run_joint_training(
             scaler.update()
             total_loss += total_loss_train.item()
 
-        # ======= 验证阶段 =======
+
         if (epoch + 1) % cfg.validate_every_n_epochs == 0 or epoch == cfg.epochs - 1:
             model.eval()
             val_loss = 0
@@ -206,7 +210,7 @@ def run_joint_training(
             if avg_val_loss < best_val_loss:
                 best_val_loss = avg_val_loss
                 torch.save(model.state_dict(), best_model_path)
-                print(f"Epoch {epoch + 1}: 发现最佳模型，验证损失：{best_val_loss:.4f}。已保存至 {best_model_path}")
+                print(f"Epoch {epoch + 1}: found a new best model with validation loss {best_val_loss:.4f}. Saved to  {best_model_path}")
 
             acc_str = []
             if cfg.training_tasks.classification.enabled:
@@ -214,7 +218,7 @@ def run_joint_training(
                     epoch_val_acc = val_correct[task_name] / len(val_dataset)
                     acc_str.append(f"{task_name}: {epoch_val_acc:.2%}")
 
-            print(f"验证结果 | Total Loss: {avg_val_loss:.4f} | " + " | ".join(acc_str))
+            print(f"Validation results | Total Loss: {avg_val_loss:.4f} | " + " | ".join(acc_str))
 
         lr_scheduler.step()
 
@@ -237,15 +241,15 @@ def run_joint_training(
                                                f"image_embs/image_embs_fold{fold_idx + 1}_sub{cfg.subject_id}.npy")
             np.save(emb_save_path_image, final_image_embs)
 
-        print(f"成功保存第 {fold_idx + 1} 折的最终嵌入！")
+        print(f"Successfully saved final embeddings for fold  {fold_idx + 1} .")
 
     return best_val_loss
 
 
-# --- load_all_labels 函数 (已简化) ---
+
 def load_all_labels(cfg):
     """
-    从文件加载所有分类任务的标签，并根据配置文件应用必要的调整。
+    Load labels for every classification task and apply the adjustments specified in the configuration.
     """
     meta_info_path = os.path.join(cfg.data_dir, cfg.meta_info_dir)
     all_labels_map = {}
@@ -258,25 +262,25 @@ def load_all_labels(cfg):
                 if os.path.exists(file_path):
                     labels = np.load(file_path)
 
-                    # 根据配置文件中的 "adjust" 字段应用标签调整
+
                     if "adjust" in info:
                         adjust_type = info["adjust"]
                         if adjust_type == "-1":
-                            # 将标签值减 1
+
                             labels = labels - 1
                         elif adjust_type.startswith("threshold_"):
-                            # 对标签进行阈值处理
+
                             try:
                                 threshold_val = float(adjust_type.split('_')[1])
                                 labels = np.where(labels > threshold_val, 1, 0).astype(np.int64)
                             except (IndexError, ValueError) as e:
                                 print(
                                     f"Warning: Failed to parse threshold value for '{task_name}': {adjust_type}. Error: {e}")
-                                # 如果解析失败，不进行调整
-                                pass
-                        # 其他调整类型可以在此处添加
 
-                    # 确保标签最终是扁平化的一维数组
+                                pass
+
+
+
                     all_labels_map[task_name] = labels.flatten()
                 else:
                     print(
@@ -287,7 +291,7 @@ def load_all_labels(cfg):
 
 
 def main(cfg):
-    # 创建保存目录
+
     emb_save_full_dir = os.path.join(cfg.data_dir, cfg.emb_save_dir)
     model_save_full_dir = os.path.join(cfg.data_dir, cfg.model_save_dir)
     os.makedirs(os.path.join(emb_save_full_dir, 'eeg_embs'), exist_ok=True)
@@ -314,7 +318,7 @@ def main(cfg):
     overall_best_val_loss = float('inf')
 
     for fold_idx in range(cfg.num_blocks):
-        print(f"\n==================== 运行第 {fold_idx + 1}/{cfg.num_blocks} 折 ====================")
+        print(f"\n==================== Running fold  {fold_idx + 1}/{cfg.num_blocks}  ====================")
         val_start_idx = fold_idx * cfg.samples_per_block
         val_end_idx = (fold_idx + 1) * cfg.samples_per_block
 
@@ -346,14 +350,14 @@ def main(cfg):
             overall_best_val_loss = current_fold_loss
 
     print("\n" + "=" * 50)
-    print("所有折叠训练结束 - 最终性能")
-    print(f"所有折叠中的最低验证损失: {overall_best_val_loss:.4f}")
+    print("All folds completed - final performance")
+    print(f"Lowest validation loss across all folds: {overall_best_val_loss:.4f}")
     print("=" * 50)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default="E:/store/DynaMind-main/configs/mapper.yaml")
+    parser.add_argument("--config", type=str, default="/path/to/DynaMind-main/configs/mapper.yaml")
     args = parser.parse_args()
 
     cfg = OmegaConf.load(args.config)

@@ -1,21 +1,17 @@
-# config.yaml
-
-# General settings
 subject_id: 1
 num_blocks: 7
 samples_per_block: 200
-seed: 42
+seed: 43
 device: "cuda"
-eeg_time_len: 400  # 原始EEG数据的时序长度，例如 5帧 * 80个时间点
+eeg_time_len: 400
 
-# File paths
-data_dir: "E:/store/DynaMind-main/"
-eeg_data_path: "data/EEG_processed/sub{subject_id}.npy"
-text_emb_path: "data/text_embs/text_embeddings.npy"
-image_emb_path: "data/image_embs/video_image_embeddings.npy"
-emb_save_dir: "E:/store/DynaMind-main/outputs/RSM/"
-model_save_dir: "E:/store/DynaMind-main/outputs/RSM/checkpoints/mapper/"
-meta_info_dir: "data/Video/meta-info"
+data_dir: "/path/to/DynaMind-main"
+eeg_data_path: "/path/to/DynaMind-main/data/EEG_processed/sub{subject_id}.npy"
+text_emb_path: "/path/to/DynaMind-main/data/text_embs/text_embeddings.npy"
+image_emb_path: "/path/to/DynaMind-main/data/image_embs/video_image_embeddings.npy"
+emb_save_dir: "/path/to/DynaMind-main/outputs/RSM"
+model_save_dir: "/path/to/DynaMind-main/outputs/RSM/checkpoints/mapper"
+meta_info_dir: "/path/to/DynaMind-main/data/Video/meta-info"
 
 label_info:
   video_category:
@@ -35,27 +31,25 @@ label_info:
   concept:
     file: "All_video_category_9.npy"
 
-# Training hyperparameters
-epochs: 300
-batch_size: 128
-learning_rate: 1e-4
-weight_decay: 0.05
-min_learning_rate: 1e-5
-validate_every_n_epochs: 5
+epochs: 288
+batch_size: 120
+learning_rate: 9.5e-5
+weight_decay: 0.048
+min_learning_rate: 1.1e-5
+validate_every_n_epochs: 6
 
-# --- 训练任务配置 (已修改) ---
 training_tasks:
   text_alignment:
     enabled: True
-    weight: 0.3
-    emb_dim: 59136  # 77 * 768
+    weight: 0.31
+    emb_dim: 102400
   image_alignment:
     enabled: True
-    weight: 0.1
-    emb_dim: 768   # 1 * 768
+    weight: 0.11
+    emb_dim: 768
   classification:
     enabled: True
-    weight: 0.5
+    weight: 0.48
     tasks:
       video_category: 40
       face_appearance: 2
@@ -65,7 +59,6 @@ training_tasks:
       color: 7
       concept: 9
 
-# 分类任务的独立损失权重
 loss_weights:
   video_category: 1
   face_appearance: 0

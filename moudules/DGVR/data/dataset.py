@@ -1,6 +1,6 @@
 import os
 import decord
-# from triton.language import tensor
+
 
 decord.bridge.set_bridge('torch')
 
@@ -15,9 +15,9 @@ class TuneAVideoDataset(Dataset):
             prompt: str,
             width: int = 512,
             height: int = 512,
-            n_sample_frames: int = 8,  # 从视频中采样的帧数
-            sample_start_idx: int = 0,   # 采样的起始索引
-            sample_frame_rate: int = 1,  # 采样的帧率   应该是间隔多少帧采一次？
+            n_sample_frames: int = 8,
+            sample_start_idx: int = 0,
+            sample_frame_rate: int = 1,
     ):
         self.video_path = video_path
         self.prompt = prompt
@@ -33,17 +33,17 @@ class TuneAVideoDataset(Dataset):
         return 1
 
     def __getitem__(self, index):
-        # load and sample video frames
-        vr = decord.VideoReader(self.video_path, width=self.width, height=self.height)    #decord 是一个高效的视频解码库，VideoReader 用于读取视频文件，指定了视频的宽度和高度（即帧的分辨率）
-        # 根据设定的采样起始索引（sample_start_idx）、采样帧率（sample_frame_rate）和采样帧数（n_sample_frames），从视频中计算出需要采样的帧索引
+
+        vr = decord.VideoReader(self.video_path, width=self.width, height=self.height)
+
         sample_index = list(range(self.sample_start_idx, len(vr), self.sample_frame_rate))[:self.n_sample_frames]
-        # sample_index = list(range(self.sample_start_idx, len(vr), self.sample_frame_rate))
+
         print(len(sample_index))
 
-        video = vr.get_batch(sample_index)  # 使用 decord 的 get_batch 方法加载指定索引的帧
-        video = rearrange(video, "f h w c -> f c h w")  # 形状从 (frames, height, width, channels) 转换为 (frames, channels, height, width)
+        video = vr.get_batch(sample_index)
+        video = rearrange(video, "f h w c -> f c h w")
 
-        # normalize to [-1, 1] 将视频数据标准化到 [-1, 1] 范围，并将文本提示（prompt_ids）与视频数据一起返回
+
         example = {
             "pixel_values": (video / 127.5 - 1.0),
             "prompt_ids": self.prompt_ids
@@ -52,7 +52,7 @@ class TuneAVideoDataset(Dataset):
         return example
 
 
-# 修改多段视频加载
+
 class TuneMultiVideoDataset(Dataset):
     def __init__(
             self,
@@ -62,12 +62,12 @@ class TuneMultiVideoDataset(Dataset):
             height: int = 72,
             n_sample_frames: int = 6,
             sample_start_idx: int = 0,
-            sample_frame_rate: int = 8,   # 应该设为8（每8帧采样一次，视频24帧） 这样就对上了最后生成视频的2s有6帧
+            sample_frame_rate: int = 8,
 
-            block: int = 40,        # 40个概念 每一块都是一个要舍弃的片头和余下的内容
-            clips: int = 5,          # 每个概念5个视频
-            waste_time: float = 3.0,  # 要舍弃的时间
-            clip_duration: float = 10.0,  # 每个片段持续2秒
+            block: int = 40,
+            clips: int = 5,
+            waste_time: float = 3.0,
+            clip_duration: float = 10.0,
     ):
         self.video_path = video_path
         self.prompt = prompt
@@ -84,65 +84,65 @@ class TuneMultiVideoDataset(Dataset):
         self.clip_duration = clip_duration
 
     def __len__(self):
-        # return 1
-        return self.block * self.clips   # len 代表传入数据量
+
+        return self.block * self.clips
 
     def __getitem__(self, index):
-        # 加载视频
+
         try:
             vr = decord.VideoReader(self.video_path, width=self.width, height=self.height)
         except Exception as e:
             print(f"Error loading video {self.video_path}: {e}")
-        # fps = vr.get_avg_fps()  # 获取视频帧率
-        fps = 24  # 视频24帧
-        total_frames = len(vr)  # 获取视频总帧数
-        # print(total_frames)
+
+        fps = 24
+        total_frames = len(vr)
+
 
         block_time=self.waste_time+self.clip_duration
-        # sample_index = []  # 存储采样帧的索引 遍历所有块逐步添加 最后导入视频
+
         total=[]
         for i in range(self.block):
-            # 计算每个片段的起始帧和结束帧
-            start = int(self.waste_time * fps+block_time*fps*i)  # 当前块开始的帧索引
+
+            start = int(self.waste_time * fps+block_time*fps*i)
 
             for j in range(5):
 
 
-                clip_frame_length = int(2 * fps )  # 每个2s的帧数
-                start_frame = start + clip_frame_length*j+1 # 当前2s开始的帧索引
-                end_frame = start_frame + clip_frame_length  # 当前片段的结束帧
+                clip_frame_length = int(2 * fps )
+                start_frame = start + clip_frame_length*j+1
+                end_frame = start_frame + clip_frame_length
                 if end_frame >12480:
                     end_frame = 12480
-                # if(i==39):
-                    # print("第",i,"块的第",j,"个片段的起始帧index ",start_frame,"结束帧index ",end_frame)
 
-                # 确保片段不超过视频总长度
+
+
+
                 if end_frame > total_frames+1:
                     raise ValueError(f"Clip {index} exceeds video length.")
 
-                # 获取每个片段的帧
+
                 clip = vr.get_batch(range(start_frame, end_frame))
-                # print("2s片段有多少帧",len(clip))  #检查正确 2s 48帧
-                clip = rearrange(clip, "f h w c -> f c h w")  # 转换为 (frames, channels, height, width)
 
-                # 采样选定帧
-                # video = clip[::self.sample_frame_rate][:self.n_sample_frames]  # 每8帧采样一次，总共采样6帧
-                video = clip[::self.sample_frame_rate]  # 每8帧采样一次，总共采样6帧
+                clip = rearrange(clip, "f h w c -> f c h w")
 
 
-                # 标准化到 [-1, 1]
+
+                video = clip[::self.sample_frame_rate]
+
+
+
                 example = {
                     "pixel_values": (video / 127.5 - 1.0),
-                    "prompt_ids": self.prompt_ids[i*5+j]  # i块j个
+                    "prompt_ids": self.prompt_ids[i*5+j]
                 }
-                # total.update(example)
+
                 total.append(example)
 
         return total
 
 
 
-# try实现multi 切2s
+
 class TuneMultiVideoDataset1(Dataset):
     def __init__(
             self,
@@ -152,12 +152,12 @@ class TuneMultiVideoDataset1(Dataset):
             height: int = 72,
             n_sample_frames: int = 6,
             sample_start_idx: int = 0,
-            sample_frame_rate: int = 8,   # 应该设为8（每8帧采样一次，视频24帧） 这样就对上了最后生成视频的2s有6帧
+            sample_frame_rate: int = 8,
 
-            block: int = 40,        # 40个概念 每一块都是一个要舍弃的片头和余下的内容
-            clips: int = 5,          # 每个概念5个视频
-            waste_time: float = 3.0,  # 要舍弃的时间
-            clip_duration: float = 10.0,  # 每个片段持续2秒
+            block: int = 40,
+            clips: int = 5,
+            waste_time: float = 3.0,
+            clip_duration: float = 10.0,
     ):
         self.video_path = video_path
         self.prompt = prompt
@@ -174,8 +174,8 @@ class TuneMultiVideoDataset1(Dataset):
         self.clip_duration = clip_duration
 
     def __len__(self):
-        # return 1
-        return self.block * self.clips   # len 代表传入数据
+
+        return self.block * self.clips
 
     def __getitem__(self, index):
         total = []
@@ -183,60 +183,60 @@ class TuneMultiVideoDataset1(Dataset):
         for subname in subnames:
             subpath = os.path.join(self.video_path, subname)
             print(subpath)
-            # 加载视频
+
             try:
                 vr = decord.VideoReader(subpath, width=self.width, height=self.height)
             except Exception as e:
                 print(f"Error loading video {self.video_path}: {e}")
-            # fps = vr.get_avg_fps()  # 获取视频帧率
-            fps = 24  # 视频24帧
-            total_frames = len(vr)  # 获取视频总帧数
-            # print(total_frames)
+
+            fps = 24
+            total_frames = len(vr)
+
 
             block_time=self.waste_time+self.clip_duration
-            # sample_index = []  # 存储采样帧的索引 遍历所有块逐步添加 最后导入视频
+
 
             for i in range(self.block):
-                # 计算每个片段的起始帧和结束帧
-                start = int(self.waste_time * fps+block_time*fps*i)  # 当前块开始的帧索引
+
+                start = int(self.waste_time * fps+block_time*fps*i)
 
                 for j in range(5):
 
 
-                    clip_frame_length = int(2 * fps )  # 每个2s的帧数
-                    start_frame = start + clip_frame_length*j+1 # 当前2s开始的帧索引
-                    end_frame = start_frame + clip_frame_length  # 当前片段的结束帧
+                    clip_frame_length = int(2 * fps )
+                    start_frame = start + clip_frame_length*j+1
+                    end_frame = start_frame + clip_frame_length
                     if end_frame >12480:
                         end_frame = 12480
-                    # if(i==39):
-                        # print("第",i,"块的第",j,"个片段的起始帧index ",start_frame,"结束帧index ",end_frame)
 
-                    # 确保片段不超过视频总长度
+
+
+
                     if end_frame > total_frames+1:
                         raise ValueError(f"Clip {index} exceeds video length.")
 
-                    # 获取每个片段的帧
+
                     clip = vr.get_batch(range(start_frame, end_frame))
-                    # print("2s片段有多少帧",len(clip))  #检查正确 2s 48帧
-                    clip = rearrange(clip, "f h w c -> f c h w")  # 转换为 (frames, channels, height, width)
 
-                    # 采样选定帧
-                    # video = clip[::self.sample_frame_rate][:self.n_sample_frames]  # 每8帧采样一次，总共采样6帧
-                    video = clip[::self.sample_frame_rate]  # 每8帧采样一次，总共采样6帧
+                    clip = rearrange(clip, "f h w c -> f c h w")
 
 
-                    # 标准化到 [-1, 1]
+
+                    video = clip[::self.sample_frame_rate]
+
+
+
                     example = {
                         "pixel_values": (video / 127.5 - 1.0),
-                        "prompt_ids": self.prompt_ids[i*5+j]  # i块j个
+                        "prompt_ids": self.prompt_ids[i*5+j]
                     }
-                    # total.update(example)
+
                     total.append(example)
 
         return total
 
 
-# 外面切分 getitem只根据传入tensor索引
+
 class TuneMultiVideoDataset2(Dataset):
     def __init__(
             self,
@@ -246,12 +246,12 @@ class TuneMultiVideoDataset2(Dataset):
             height: int = 72,
             n_sample_frames: int = 6,
             sample_start_idx: int = 0,
-            sample_frame_rate: int = 8,   # 应该设为8（每8帧采样一次，视频24帧） 这样就对上了最后生成视频的2s有6帧
+            sample_frame_rate: int = 8,
 
-            block: int = 40,        # 40个概念 每一块都是一个要舍弃的片头和余下的内容
-            clips: int = 5,          # 每个概念5个视频
-            waste_time: float = 3.0,  # 要舍弃的时间
-            clip_duration: float = 10.0,  # 每个片段持续2秒
+            block: int = 40,
+            clips: int = 5,
+            waste_time: float = 3.0,
+            clip_duration: float = 10.0,
     ):
         self.video = video
         self.prompt = prompt
@@ -268,14 +268,128 @@ class TuneMultiVideoDataset2(Dataset):
         self.clip_duration = clip_duration
 
     def __len__(self):
-        # return 1
-        return len(self.video)   # len 代表传入数据
+
+        return len(self.video)
 
     def __getitem__(self, index):
 
-        # 标准化到 [-1, 1]
+
         example = {
             "pixel_values": (self.video[index] / 127.5 - 1.0),
-            "prompt_ids": self.prompt_ids[index]  # i块j个
+            "prompt_ids": self.prompt_ids[index]
+        }
+        return example
+
+
+import os
+import decord
+import torch
+from einops import rearrange
+from torch.utils.data import Dataset
+
+class TuneMultiVideoDataset3(Dataset):
+    def __init__(
+            self,
+            video_paths: list,
+            prompt_path: str,
+            width: int = 128,
+            height: int = 72,
+            n_sample_frames: int = 6,
+            sample_frame_rate: int = 8,
+            block: int = 40,
+            clips: int = 5,
+            waste_time: float = 3.0,
+            clip_duration: float = 10.0,
+            tokenizer=None,
+            model_max_length: int = 77
+    ):
+        self.video_paths = video_paths
+        self.prompt_path = prompt_path
+        self.width = width
+        self.height = height
+        self.n_sample_frames = n_sample_frames
+        self.sample_frame_rate = sample_frame_rate
+        self.fps = 24
+
+        self.block = block
+        self.clips = clips
+        self.waste_time = waste_time
+        self.clip_duration = clip_duration
+
+
+        self.tokenizer = tokenizer
+        self.model_max_length = model_max_length
+
+
+        self.video_data = self._preprocess_videos()
+        self.prompt_ids = self._preprocess_prompts()
+
+    def _preprocess_videos(self):
+        """
+        Load all videos, split and sample their frames with the configured policy, and keep the results in memory.
+        """
+        all_video_clips = []
+        for video_path in self.video_paths:
+            if not os.path.exists(video_path):
+                print(f"Warning: Video file not found at {video_path}")
+                continue
+
+            try:
+                vr = decord.VideoReader(video_path, width=self.width, height=self.height)
+            except Exception as e:
+                print(f"Error loading video {video_path}: {e}")
+                continue
+
+            total_frames = len(vr)
+            for i in range(self.block):
+                start = int(self.waste_time * self.fps + (self.clip_duration+self.waste_time) * self.fps * i)
+                for j in range(self.clips):
+                    clip_frame_length = int(2 * self.fps)
+                    start_frame = start + clip_frame_length * j + 1
+                    end_frame = start_frame + clip_frame_length
+
+                    if start_frame >= total_frames:
+                        break
+
+                    end_frame = min(end_frame, total_frames)
+
+                    clip = vr.get_batch([i for i in range(start_frame, end_frame)])
+                    video = clip[::self.sample_frame_rate][:self.n_sample_frames]
+
+
+                    clip_tensor = torch.from_numpy(video.numpy()).permute(0, 3, 1, 2)
+                    clip_tensor = clip_tensor.float() / 255.0
+                    clip_tensor = clip_tensor * 2.0 - 1.0
+
+                    all_video_clips.append(clip_tensor)
+
+        return all_video_clips
+
+    def _preprocess_prompts(self):
+        """
+        Read the text file and encode its entries with the tokenizer.
+        """
+        if not self.tokenizer:
+            raise ValueError("Tokenizer must be provided to preprocess prompts.")
+
+        with open(self.prompt_path, 'r') as f:
+            text_prompts = [line.strip() for line in f]
+
+        return self.tokenizer(
+            text_prompts,
+            max_length=self.model_max_length,
+            padding="max_length",
+            truncation=True,
+            return_tensors="pt"
+        ).input_ids
+
+    def __len__(self):
+
+        return min(len(self.video_data), self.prompt_ids.shape[0])
+
+    def __getitem__(self, index):
+        example = {
+            "pixel_values": self.video_data[index],
+            "prompt_ids": self.prompt_ids[index],
         }
         return example
