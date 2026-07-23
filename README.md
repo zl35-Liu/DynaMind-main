@@ -1,25 +1,23 @@
+# DynaMind: Reconstructing Dynamic Visual Scenes from EEG by Aligning Temporal Dynamics and Multimodal Semantics to Guided Diffusion
+
 <div align="center">
-
-# DynaMind
-
-### Reconstructing Dynamic Visual Scenes from EEG by Aligning Temporal Dynamics and Multimodal Semantics to Guided Diffusion
-
-Junxiang Liu, Junming Lin, Jie Zhou, Wei Xiong, Hongfei Ji, Jie Zhuang, Jie Li<sup>*</sup>, Jiangtong Li<sup>*</sup>
-
-Tongji University
 
 [![CVPR 2026](https://img.shields.io/badge/CVPR-2026-4b44ce.svg)](https://openaccess.thecvf.com/content/CVPR2026F/html/Liu_DynaMind_Reconstructing_Dynamic_Visual_Scenes_from_EEG_by_Aligning_Temporal_CVPRF_2026_paper.html)
 [![Paper](https://img.shields.io/badge/Paper-PDF-b31b1b.svg)](https://www.jiangtongli.me/uploads/papers/2026-CVPR-DynaMind.pdf)
 [![Code GitHub](https://img.shields.io/badge/Code-GitHub-181717.svg?logo=github)](https://github.com/zl35-Liu/DynaMind-main)
 [![Project Page](https://img.shields.io/badge/Project-Page-2ea44f.svg)](https://zl35-liu.github.io/DynaMind/)
 
-<sup>*</sup> Corresponding authors
+*A neuroscience-inspired dual-guidance framework for reconstructing semantically accurate and temporally coherent dynamic visual scenes from EEG.*
+
+[Overview](#overview) • [Results](#results-at-a-glance) • [Repository Structure](#repository-structure) • [Installation](#installation) • [Citation](#citation) • [Acknowledgments](#acknowledgments)
 
 </div>
 
+---
+
 <div align="center">
-  <p><strong>Qualitative comparison of DynaMind and EEG2Video reconstructions against ground-truth videos on SEED-DV.</strong></p>
   <img src="https://zl35-liu.github.io/DynaMind/static/images/paper/compare1.png" alt="Qualitative comparison of DynaMind and EEG2Video on SEED-DV" width="95%">
+  <p><strong>Qualitative comparison of DynaMind and EEG2Video reconstructions against ground-truth videos on SEED-DV.</strong></p>
 </div>
 
 DynaMind reconstructs dynamic visual scenes from electroencephalography (EEG) by jointly modeling regional visual semantics and neural temporal dynamics. The framework follows the neuroscience-inspired dual-stream theory and uses semantic and temporal signals to guide video diffusion.
